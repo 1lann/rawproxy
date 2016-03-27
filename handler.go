@@ -80,14 +80,6 @@ func parseRules(c *setup.Controller) (string, string, []string, error) {
 
 	for c.Next() {
 		if !c.NextArg() {
-			if c.NextBlock() {
-				switch c.Val() {
-				case "except":
-					except = append(except, c.RemainingArgs()...)
-				}
-				break
-			}
-
 			return "", "", nil, errors.New("rawproxy: missing `path` parameter")
 		}
 
@@ -98,6 +90,13 @@ func parseRules(c *setup.Controller) (string, string, []string, error) {
 		}
 
 		to = c.Val()
+
+		for c.NextBlock() {
+			switch c.Val() {
+			case "except":
+				except = append(except, c.RemainingArgs()...)
+			}
+		}
 	}
 
 	return path, to, except, nil
