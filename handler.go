@@ -7,7 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
+	"net/http/httputil"
 )
 
 type RawProxy struct {
@@ -45,37 +45,20 @@ func (c *RawProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) (int,
 
 	defer remote.Close()
 
-	remote.Write([]byte(r.Method + " " + r.RequestURI + " HTTP/1.1\r\n"))
-
-	remote.Write([]byte("Host: " + r.Host + "\r\n"))
-
-	for headerName, header := range r.Header {
-		remote.Write([]byte(headerName + ": " +
-			strings.Join(header, ", ") + "\r\n"))
+	dump, err := httputil.DumpRequest(r, false)
+	if err != nil {
+		return http.StatusInternalServerError, err
 	}
 
-	remote.Write([]byte("\r\n"))
-
-	hasClosed := false
-	wait := make(chan bool)
+	remote.Write(dump)
 
 	go func() {
+		defer conn.Close()
+		defer remote.Close()
 		io.Copy(remote, readWriter)
-		if !hasClosed {
-			hasClosed = true
-			wait <- true
-		}
 	}()
 
-	go func() {
-		io.Copy(conn, remote)
-		if !hasClosed {
-			hasClosed = true
-			wait <- true
-		}
-	}()
-
-	<-wait
+	io.Copy(conn, remote)
 
 	return 0, nil
 }
