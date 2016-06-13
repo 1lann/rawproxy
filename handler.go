@@ -2,14 +2,18 @@ package rawproxy
 
 import (
 	"errors"
-	"github.com/mholt/caddy/caddy/setup"
-	"github.com/mholt/caddy/middleware"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
+
+	"github.com/1lann/caddy/caddy/setup"
+	"github.com/1lann/caddy/middleware"
+	"github.com/mholt/caddy"
+	"github.com/mholt/caddy/caddyhttp/httpserver"
 )
 
+// RawProxy represents the rawproxy plugin for Caddy.
 type RawProxy struct {
 	Next   middleware.Handler
 	path   string
@@ -17,7 +21,7 @@ type RawProxy struct {
 	except []string
 }
 
-func (c *RawProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) (int,
+func (c RawProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) (int,
 	error) {
 	requestPath := middleware.Path(r.URL.Path)
 	if !requestPath.Matches(c.path) {
@@ -63,15 +67,22 @@ func (c *RawProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) (int,
 	return 0, nil
 }
 
-func Setup(c *setup.Controller) (middleware.Middleware, error) {
+func init() {
+	caddy.RegisterPlugin("rawproxy", caddy.Plugin{
+		ServerType: "http",
+		Action:     setupPlugin,
+	})
+}
+
+func setupPlugin(c *setup.Controller) error {
 	path, to, except, err := parseRules(c)
 	if err != nil {
 		return nil, err
 	}
 
-	return func(next middleware.Handler) middleware.Handler {
-		return &RawProxy{next, path, to, except}
-	}, nil
+	httpserver.GetConfig(c.Key).AddMiddleware(func(next httpserver.Handler) httpserver.Handler {
+		return RawProxy{next, path, to, except}
+	})
 }
 
 func parseRules(c *setup.Controller) (string, string, []string, error) {
